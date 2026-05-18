@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Trắc Nghiệm</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --chalk: #e8f5e2;
+    --chalk-dim: rgba(232,245,226,0.7);
+    --board: #2d6a4f;
+    --red: #c0392b;
+    --gold: #f1c40f;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: #111;
+    overflow: hidden;
+    font-family: 'Be Vietnam Pro', sans-serif;
+  }
+
+  #scene {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  #bg {
+    position: absolute; inset: 0;
+    background-size: cover;
+    background-position: center top;
+  }
+
+  /* DARK OVERLAY */
+  #overlay {
+    position: absolute; inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  /* SPEECH BUBBLE */
+  #speech {
+    position: absolute;
+    top: 34%; left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border-radius: 16px;
+    padding: 14px 24px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1a1a1a;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    white-space: nowrap;
+    z-index: 30;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #speech::after {
+    content: '';
+    position: absolute;
+    bottom: -12px; left: 28px;
+    border: 12px solid transparent;
+    border-top-color: #fff;
+    border-bottom: 0;
+  }
+  #speech.show { opacity: 1; }
+
+  /* BOARD UI */
+  #board-ui {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    padding: 20px;
+  }
+  #board-ui.show { display: flex; }
+
+  .board-frame {
+    width: min(72vw, 900px);
+    background: rgba(28, 76, 52, 0.85);
+    border: 2.5px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 24px 32px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: -6vh;
+  }
+
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: rgba(232,245,226,0.6);
+    letter-spacing: 0.4px;
+  }
+  .hud-lives { display: flex; gap: 5px; }
+  .heart { font-size: 15px; transition: transform 0.2s; }
+  .heart.lost { opacity: 0.18; transform: scale(0.8); }
+
+  .q-label {
+    font-family: 'Caveat', cursive;
+    font-size: clamp(22px, 3.2vw, 32px);
+    color: var(--chalk);
+    line-height: 1.45;
+    text-align: center;
+    min-height: 2.8em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .opt-btn {
+    font-family: 'Caveat', cursive;
+    font-size: clamp(17px, 2.4vw, 25px);
+    color: var(--chalk);
+    background: rgba(255,255,255,0.07);
+    border: 1.5px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 13px 18px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .opt-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.15);
+    transform: translateY(-2px);
+  }
+  .opt-btn:disabled { cursor: default; }
+  .opt-btn.correct { background: rgba(39,174,96,0.32); border-color: #2ecc71; color: #a8f0c0; }
+  .opt-btn.wrong   { background: rgba(192,57,43,0.38); border-color: #e74c3c; color: #f5a9a3; }
+
+  /* START SCREEN */
+  #start-screen {
+    position: absolute; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 9vh;
+    z-index: 20;
+  }
+  #start-screen.hidden { display: none; }
+
+  .start-card {
+    background: rgba(15,15,15,0.65);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 28px 40px 32px;
+    text-align: center;
+    color: #fff;
+    max-width: 420px;
+    width: 90%;
+  }
+  .start-card h1 { font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+  .start-card p  { font-size: 14px; color: rgba(255,255,255,0.58); line-height: 1.65; margin-bottom: 22px; }
+
+  .btn-start {
+    background: var(--red);
+    color: #fff;
+    border: none;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 13px 42px;
+    border-radius: 50px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 4px 18px rgba(192,57,43,0.5);
+  }
+  .btn-start:hover { background: #a93226; transform: translateY(-1px); }
+
+  /* CHOICE SCREEN */
+  #choice-screen {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 8vh;
+    z-index: 25;
+  }
+  #choice-screen.show { display: flex; }
+
+  .choice-card {
+    background: rgba(12,12,12,0.72);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 18px;
+    padding: 22px 30px 26px;
+    text-align: center;
+    width: min(480px, 90vw);
+  }
+  .choice-card p { color: rgba(255,255,255,0.55); font-size: 14px; margin-bottom: 14px; }
+  .choice-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .btn-quit {
+    background: rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.65);
+    border: 1px solid rgba(255,255,255,0.14);
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 14px; font-weight: 500;
+    padding: 12px 14px;
+    border-radius: 12px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-quit:hover { background: rgba(255,255,255,0.13); }
+
+  .btn-retry {
+    background: var(--red);
+    color: #fff;
+    border: none;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 14px; font-weight: 700;
+    padding: 12px 14px;
+    border-radius: 12px; cursor: pointer;
+    box-shadow: 0 3px 12px rgba(192,57,43,0.45);
+    transition: background 0.15s;
+  }
+  .btn-retry:hover { background: #a93226; }
+
+  /* WIN SCREEN */
+  #win-screen {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+    background: rgba(0,0,0,0.52);
+  }
+  #win-screen.show { display: flex; }
+
+  .win-card {
+    background: var(--board);
+    border: 4px solid #7a5c3a;
+    border-radius: 12px;
+    padding: 40px 56px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .win-card .trophy { font-size: 54px; margin-bottom: 10px; }
+  .win-card h2 { font-family: 'Caveat', cursive; font-size: 46px; color: var(--gold); margin-bottom: 8px; }
+  .win-card p  { color: var(--chalk-dim); font-size: 15px; margin-bottom: 22px; line-height: 1.6; }
+  .btn-replay {
+    background: var(--gold); color: #1a1a1a;
+    border: none;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 15px; font-weight: 700;
+    padding: 13px 36px; border-radius: 50px; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-replay:hover { opacity: 0.85; }
+
+  /* FEEDBACK */
+  #feedback {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Caveat', cursive;
+    font-size: clamp(60px, 10vw, 90px);
+    font-weight: 700;
+    pointer-events: none;
+    z-index: 35;
+    opacity: 0;
+    transition: opacity 0.25s;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.45);
+  }
+  #feedback.show { opacity: 1; }
+  #feedback.correct { color: #2ecc71; }
+  #feedback.wrong   { color: #e74c3c; }
+</style>
+</head>
+<body>
+<div id="scene">
+  <div id="bg"></div>
+  <div id="overlay"></div>
+  <div id="feedback"></div>
+  <div id="speech"></div>
+
+  <!-- PHÂN CẢNH 0 -->
+  <div id="start-screen">
+    <div class="start-card">
+      <h1 id="start-title">🎓 Game Trắc Nghiệm</h1>
+      <p id="start-desc">Giáo viên sẽ hỏi — bạn trả lời<br>Chọn đáp án A hoặc B<br>Trả lời đúng 5 câu liên tiếp để thắng!</p>
+      <button class="btn-start" onclick="Game.start()">BẮT ĐẦU GAME</button>
+    </div>
+  </div>
+
+  <!-- PHÂN CẢNH 2 -->
+  <div id="board-ui">
+    <div class="board-frame">
+      <div class="hud">
+        <span id="q-counter">Lượt: 1 / 5</span>
+        <div class="hud-lives" id="lives-bar"></div>
+        <span id="score-label">Điểm: 0</span>
+      </div>
+      <div class="q-label" id="q-text">Đang tải câu hỏi...</div>
+      <div class="options">
+        <button class="opt-btn" id="btn-a" onclick="Game.answer(0)">A. —</button>
+        <button class="opt-btn" id="btn-b" onclick="Game.answer(1)">B. —</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHÂN CẢNH 3 -->
+  <div id="choice-screen">
+    <div class="choice-card">
+      <p>Bạn muốn làm gì tiếp theo?</p>
+      <div class="choice-btns">
+        <button class="btn-quit"  onclick="Game.quit()">😔 Thôi bỏ đi</button>
+        <button class="btn-retry" onclick="Game.requestRetry()">✋ Thầy ơi cho em gỡ!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WIN -->
+  <div id="win-screen">
+    <div class="win-card">
+      <div class="trophy">🏆</div>
+      <h2>Xuất sắc!</h2>
+      <p>Em trả lời đúng 5 câu liên tiếp!<br>Thầy ghi điểm 10 rồi đó 😄</p>
+      <button class="btn-replay" onclick="Game.quit()">Chơi lại</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const IMGS = {
+  img0: 'https://res.cloudinary.com/dlrax6e5x/image/upload/v1779103569/bdzywof275lo2vzc08fm.png',
+  img1: 'https://res.cloudinary.com/dlrax6e5x/image/upload/v1779103569/inyatelf1zby5kxesffi.png',
+  img2: 'https://res.cloudinary.com/dlrax6e5x/image/upload/v1779103569/wd44icrcle4xgarsyvlt.png',
+  img3: 'https://res.cloudinary.com/dlrax6e5x/image/upload/v1779103570/cpcva9f82esqlqxfopqc.png',
+  img4: 'https://res.cloudinary.com/dlrax6e5x/image/upload/v1779103569/fhj3njsgjfvrzg10coos.png',
+};
+const SFX = {
+  callUp:   'https://res.cloudinary.com/dlrax6e5x/video/upload/v1779103716/pg4tvwrukidnexyczhls.mp3',
+  retry:    'https://res.cloudinary.com/dlrax6e5x/video/upload/v1779103768/blyi0bgt8wuf6olu6u9o.mp3',
+  punish:   'https://res.cloudinary.com/dlrax6e5x/video/upload/v1779103959/linyqb66yxlvnfwxumet.mp3',
+  footstep: 'https://res.cloudinary.com/dlrax6e5x/video/upload/v1779104021/vwyywx08tood5lejehyp.mp3',
+};
+
+/* Preload */
+Object.values(IMGS).forEach(s => { const i = new Image(); i.src = s; });
+const audios = {};
+Object.entries(SFX).forEach(([k,s]) => { const a = new Audio(s); a.preload='auto'; audios[k]=a; });
+
+function playSound(key) {
+  const a = audios[key];
+  if (!a) return Promise.resolve();
+  a.currentTime = 0;
+  return new Promise(res => { a.onended = res; a.onerror = res; a.play().catch(res); });
+}
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+/* DOM */
+const $bg        = document.getElementById('bg');
+const $overlay   = document.getElementById('overlay');
+const $speech    = document.getElementById('speech');
+const $boardUI   = document.getElementById('board-ui');
+const $startScr  = document.getElementById('start-screen');
+const $choiceScr = document.getElementById('choice-screen');
+const $winScr    = document.getElementById('win-screen');
+const $feedback  = document.getElementById('feedback');
+const $qText     = document.getElementById('q-text');
+const $qCounter  = document.getElementById('q-counter');
+const $scoreLabel= document.getElementById('score-label');
+const $livesBar  = document.getElementById('lives-bar');
+const $btnA      = document.getElementById('btn-a');
+const $btnB      = document.getElementById('btn-b');
+
+/* Questions */
+const QUESTIONS = [
+  { q:"Đạo hàm của f(x) = x² là bao nhiêu?",        opts:["A. f'(x) = 2x","B. f'(x) = x"],        ans:0 },
+  { q:"log₂(8) bằng bao nhiêu?",                     opts:["A. 2","B. 3"],                          ans:1 },
+  { q:"Đạo hàm của f(x) = sin(x) là gì?",            opts:["A. cos(x)","B. −cos(x)"],               ans:0 },
+  { q:"log₁₀(100) bằng bao nhiêu?",                  opts:["A. 10","B. 2"],                         ans:1 },
+  { q:"Đạo hàm của f(x) = eˣ là gì?",                opts:["A. eˣ","B. x·e^(x−1)"],                ans:0 },
+  { q:"Nếu log₃(x) = 2 thì x bằng bao nhiêu?",      opts:["A. 6","B. 9"],                          ans:1 },
+  { q:"Đạo hàm của f(x) = ln(x) là gì?",             opts:["A. 1/x","B. ln(x)/x"],                  ans:0 },
+  { q:"log₅(1) bằng bao nhiêu?",                     opts:["A. 1","B. 0"],                          ans:1 },
+  { q:"Đạo hàm của f(x) = x³ tại x = 2 là?",        opts:["A. 12","B. 8"],                         ans:0 },
+  { q:"log₂(32) bằng bao nhiêu?",                    opts:["A. 4","B. 5"],                          ans:1 },
+  { q:"Đạo hàm của f(x) = cos(x) là gì?",            opts:["A. sin(x)","B. −sin(x)"],               ans:1 },
+  { q:"Nếu log₂(x) = 4 thì x bằng bao nhiêu?",      opts:["A. 8","B. 16"],                         ans:1 },
+];
+
+const S = { score:0, lives:5, qIdx:0, answered:false, pool:[] };
+
+function shuffle(arr) { return [...arr].sort(()=>Math.random()-0.5); }
+
+function setBg(k) { $bg.style.backgroundImage = `url(${IMGS[k]})`; }
+
+function fadeOverlay(toOpacity, ms) {
+  return new Promise(res => {
+    $overlay.style.transition = `opacity ${ms}ms ease`;
+    $overlay.style.opacity = toOpacity;
+    setTimeout(res, ms);
+  });
+}
+
+function showSpeech(t) { $speech.textContent=t; $speech.classList.add('show'); }
+function hideSpeech()  { $speech.classList.remove('show'); }
+
+function renderLives() {
+  $livesBar.innerHTML = '';
+  for (let i=0;i<5;i++) {
+    const s=document.createElement('span');
+    s.className='heart'+(i>=S.lives?' lost':'');
+    s.textContent='♥';
+    $livesBar.appendChild(s);
+  }
+}
+
+function loadQ() {
+  S.answered = false;
+  [$btnA,$btnB].forEach(b=>{ b.className='opt-btn'; b.disabled=false; });
+  const q = S.pool[S.qIdx];
+  $qCounter.textContent = `Lượt: ${S.qIdx+1} / 5`;
+  $scoreLabel.textContent = `Điểm: ${S.score}`;
+  $qText.textContent = q.q;
+  $btnA.textContent = q.opts[0];
+  $btnB.textContent = q.opts[1];
+  renderLives();
+}
+
+function showFeedback(type) {
+  $feedback.textContent = type==='correct'?'ĐÚNG!':'SAI!';
+  $feedback.className = `show ${type}`;
+  setTimeout(()=>{ $feedback.className=''; }, 1400);
+}
+
+const Game = {
+
+  async start() {
+    // Reset title nếu đã thua trước đó
+    document.getElementById('start-title').textContent = '🎓 Game Trắc Nghiệm';
+    document.getElementById('start-desc').innerHTML = 'Giáo viên sẽ hỏi — bạn trả lời<br>Chọn đáp án A hoặc B<br>Trả lời đúng 5 câu liên tiếp để thắng!';
+
+    $startScr.classList.add('hidden');
+    setBg('img1');
+
+    await delay(400);
+    showSpeech('Em kia lên bảng! 👆');
+    playSound('callUp');
+    await delay(2400);
+    hideSpeech();
+
+    playSound('footstep');
+    await delay(500);
+    await fadeOverlay(1, 1200);
+
+    setBg('img2');
+    $boardUI.classList.add('show');
+    S.score=0; S.lives=5; S.qIdx=0;
+    S.pool = shuffle(QUESTIONS);
+    loadQ();
+
+    await fadeOverlay(0, 800);
+  },
+
+  async answer(idx) {
+    if (S.answered) return;
+    S.answered = true;
+    $btnA.disabled = true; $btnB.disabled = true;
+
+    const q = S.pool[S.qIdx];
+    const ok = idx === q.ans;
+
+    (idx===0?$btnA:$btnB).classList.add(ok?'correct':'wrong');
+    if (!ok) (q.ans===0?$btnA:$btnB).classList.add('correct');
+    showFeedback(ok?'correct':'wrong');
+
+    if (ok) {
+      S.score++; S.qIdx++;
+      await delay(1500);
+      if (S.qIdx >= 5) { await Game.win(); }
+      else { loadQ(); }
+    } else {
+      S.lives--;
+      await delay(1500);
+      await Game.punish();
+    }
+  },
+
+  async punish() {
+    $boardUI.classList.remove('show');
+    await fadeOverlay(1, 600);
+    setBg('img3');
+    await fadeOverlay(0, 600);
+
+    showSpeech('Thôi về chỗ đi! 0 điểm 😤');
+    playSound('punish');
+    await delay(3000);
+    hideSpeech();
+
+    playSound('footstep');
+    await delay(600);
+    await fadeOverlay(1, 800);
+    setBg('img0');
+    await fadeOverlay(0, 600);
+
+    if (S.lives <= 0) {
+      await Game.lose();
+    } else {
+      $choiceScr.classList.add('show');
+    }
+  },
+
+  quit() {
+    $choiceScr.classList.remove('show');
+    $winScr.classList.remove('show');
+    $boardUI.classList.remove('show');
+    $overlay.style.opacity = '0';
+    setBg('img0');
+    $startScr.classList.remove('hidden');
+  },
+
+  async requestRetry() {
+    $choiceScr.classList.remove('show');
+
+    await fadeOverlay(1, 400);
+    setBg('img4');
+    await fadeOverlay(0, 500);
+
+    // Phát âm thanh xin gỡ và đợi xong
+    await playSound('retry');
+    await delay(300);
+
+    playSound('footstep');
+    await delay(500);
+    await fadeOverlay(1, 1000);
+
+    S.qIdx = 0;
+    S.pool = shuffle(QUESTIONS);
+    setBg('img2');
+    $boardUI.classList.add('show');
+    loadQ();
+
+    await fadeOverlay(0, 800);
+  },
+
+  async win() {
+    $boardUI.classList.remove('show');
+    $winScr.classList.add('show');
+  },
+
+  async lose() {
+    document.getElementById('start-title').textContent = '😔 Hết lượt rồi!';
+    document.getElementById('start-desc').textContent = `Bạn chỉ đúng được ${S.score} câu. Cố lên lần sau nhé!`;
+    await fadeOverlay(0, 600);
+    $startScr.classList.remove('hidden');
+  },
+};
+
+setBg('img0');
+</script>
+</body>
+</html>
